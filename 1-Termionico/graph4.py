@@ -26,12 +26,20 @@ print(f"Eixo X original: {df.columns[0]}")
 print(f"Eixo Y: {y_label}")
 
 # Extrair dados e converter para float
-x_data = df.iloc[:, 0].apply(convert_to_float).values  # 1/T - eixo x
+x_data_raw = df.iloc[:, 0].apply(convert_to_float).values  # 1/T em 1/°C
 y_data = df.iloc[:, 1].apply(convert_to_float).values  # Log(j/T²) - eixo y
 
-# Multiplicar x_data pela constante de Boltzmann
-x_data = x_data
-print(f"Valores de x multiplicados por Kb = {Kb}")
+# Converter de 1/T_celsius para 1/T_kelvin
+# Se x_data_raw = 1/T_celsius, então T_celsius = 1/x_data_raw
+# T_kelvin = T_celsius + 273
+# x_data = 1/T_kelvin = 1/(T_celsius + 273) = 1/(1/x_data_raw + 273)
+T_celsius = 1/x_data_raw  # Converter de 1/T para T em Celsius
+T_kelvin = T_celsius + 273  # Converter para Kelvin
+x_data = 1/T_kelvin  # Converter de volta para 1/T em Kelvin
+
+print(f"Temperaturas em Celsius (primeiras 5): {T_celsius[:5]}")
+print(f"Temperaturas em Kelvin (primeiras 5): {T_kelvin[:5]}")
+print(f"Constante de Boltzmann: Kb = {Kb}")
 
 print(f"Dados X (primeiros 5): {x_data[:5]}")
 print(f"Dados Y (primeiros 5): {y_data[:5]}")
@@ -44,11 +52,6 @@ y_valid = y_data[valid_idx]
 # Criar o gráfico
 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 
-# Plot dos pontos
-ax.scatter(x_valid, y_valid, 
-          color='blue', s=50, alpha=0.8, 
-          label='Dados experimentais', marker='o')
-
 # Ajuste linear
 if len(x_valid) > 1:
     # Calcular regressão linear
@@ -57,22 +60,45 @@ if len(x_valid) > 1:
     print(f"Coeficiente angular: {slope:.4f}")
     print(f"Intercepto: {intercept:.4f}")
     print(f"R²: {r_value**2:.4f}")
+    print(f"Erro padrão do slope: {std_err:.4f}")
+    
+    # Calcular W (função trabalho) e sua incerteza
+    W_value = abs(slope) * Kb  # Valor absoluto porque W é positivo
+    W_uncertainty = std_err * Kb  # Incerteza de W
+    
+    print(f"W = {W_value:.4f} ± {W_uncertainty:.4f} eV")
     
     # Gerar pontos para a linha de fit
     x_fit = np.linspace(x_valid.min(), x_valid.max(), 100)
     y_fit = slope * x_fit + intercept
     
-    # Plot da linha de fit
-    ax.plot(x_fit, y_fit, color='red', linestyle='-', linewidth=2, 
-           label=f'Ajuste linear (m = {slope:.4f})')
+    # Plot dos pontos (em vermelho)
+    ax.scatter(x_valid, y_valid, 
+              color='red', s=50, alpha=0.8, 
+              label='Dados', marker='o')
+    
+    # Plot da linha de fit (em amarelo)
+    ax.plot(x_fit, y_fit, color='gold', linestyle='-', linewidth=2, 
+           label='Ajuste linear')
 
 # Configurar o gráfico
 ax.set_xlabel('1/T (1/K)', fontsize=14)
 ax.set_ylabel(y_label, fontsize=14)
-ax.set_title(f'Gráfico 1/T vs Log(j/T²) - Coeficiente Angular = {slope* Kb:.4f}', fontsize=14, pad=20)
+ax.set_title('Descobrindo W do Tungstênio', fontsize=16, pad=20)
 
-# Configurar a legenda
-ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+# Configurar a legenda no topo esquerdo
+ax.legend(loc='upper right', frameon=True, fancybox=True, shadow=True)
+
+# Adicionar equação da reta e valor de W em itálico
+if len(x_valid) > 1:
+    equation_text = f'Coef. lin. y = {slope:.4f}x + {intercept:.4f}'
+    ax.text(0.98, 0.85, equation_text, transform=ax.transAxes, 
+            fontsize=16, style='italic', ha='right', color='black')
+    
+    # Adicionar valor de W com incerteza
+    W_text = f'W = ({W_value:.4f} ± {W_uncertainty:.4f}) eV'
+    ax.text(0.98, 0.80, W_text, transform=ax.transAxes, 
+            fontsize=16, style='italic', ha='right', color='black')
 
 # Configurar grade
 ax.grid(True, alpha=0.3)

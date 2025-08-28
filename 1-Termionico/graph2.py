@@ -38,11 +38,6 @@ y_valid = y_data[valid_idx]
 # Criar o gráfico
 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 
-# Plot dos pontos
-ax.scatter(x_valid, y_valid, 
-          color='blue', s=50, alpha=0.8, 
-          label='Dados experimentais', marker='o')
-
 # Ajuste linear
 if len(x_valid) > 1:
     # Calcular regressão linear
@@ -51,22 +46,40 @@ if len(x_valid) > 1:
     print(f"Coeficiente angular: {slope:.4f}")
     print(f"Intercepto: {intercept:.4f}")
     print(f"R²: {r_value**2:.4f}")
+    print(f"Erro padrão do slope: {std_err:.4f}")
     
     # Gerar pontos para a linha de fit
     x_fit = np.linspace(x_valid.min(), x_valid.max(), 100)
     y_fit = slope * x_fit + intercept
     
-    # Plot da linha de fit
-    ax.plot(x_fit, y_fit, color='red', linestyle='-', linewidth=2, 
-           label=f'Ajuste linear (m = {slope:.4f})')
+    # Plot dos pontos (em vermelho)
+    ax.scatter(x_valid, y_valid, 
+              color='red', s=50, alpha=0.8, 
+              label='Dados', marker='o')
+    
+    # Plot da linha de fit (em amarelo)
+    ax.plot(x_fit, y_fit, color='gold', linestyle='-', linewidth=2, 
+           label='Fit linear')
 
 # Configurar o gráfico
 ax.set_xlabel(x_label, fontsize=14)
 ax.set_ylabel(y_label, fontsize=14)
-ax.set_title(f'Gráfico Log-Log - Coeficiente Angular = {slope:.4f}', fontsize=16, pad=20)
+ax.set_title('Verificação da lei de Child-Langmuir', fontsize=16, pad=20)
 
-# Configurar a legenda
-ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+# Configurar a legenda no topo esquerdo
+ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
+
+# Adicionar equação da reta em itálico abaixo da legenda
+if len(x_valid) > 1:
+    # Primeira linha: equação
+    equation_text = f'y = {slope:.4f}x - {-intercept:.4f}'
+    ax.text(0.02, 0.85, equation_text, transform=ax.transAxes, 
+            fontsize=16, style='italic', color='black')
+    
+    # Segunda linha: coeficiente linear com incerteza
+    coef_text = f'Coef. lin. {slope:.4f} ± {std_err:.4f}'
+    ax.text(0.02, 0.80, coef_text, transform=ax.transAxes, 
+            fontsize=16, style='italic', color='black')
 
 # Configurar grade
 ax.grid(True, alpha=0.3)
