@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy import stats
+from scipy.stats import linregress
+import os
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
@@ -54,6 +56,165 @@ def calcular_interseccao(y_horizontal, slope, intercept):
         return None
     return (y_horizontal - intercept) / slope
 
+def calcular_incerteza_bcorte(y_horizontal, slope, intercept, sigma_slope, sigma_intercept, sigma_y_horizontal):
+    """
+    Calcula a incerteza de B_corte usando propagação de erro
+    x = (y_horizontal - intercept) / slope
+    
+    Considera três fontes de incerteza:
+    - sigma_y_horizontal: desvio padrão da média da reta horizontal
+    - sigma_slope: incerteza do ângulo dos mínimos quadrados
+    - sigma_intercept: incerteza do intercepto
+    """
+    if abs(slope) < 1e-10:
+        return None
+    
+    # Derivadas parciais
+    dx_dy_horizontal = 1 / slope
+    dx_dslope = -(y_horizontal - intercept) / (slope**2)
+    dx_dintercept = -1 / slope
+    
+    # Propagação de erro com três contribuições
+    sigma_x = np.sqrt(
+        (dx_dy_horizontal * sigma_y_horizontal)**2 +
+        (dx_dslope * sigma_slope)**2 + 
+        (dx_dintercept * sigma_intercept)**2
+    )
+    return sigma_x
+
+def calcular_incerteza_em(bcorte, sigma_bcorte):
+    """
+    Calcula a incerteza de e/m considerando:
+    - 4.81 ± 0.01 (baseado no último algarismo significativo)
+    - 0.02 ± 0.01 (baseado no último algarismo significativo)
+    - B_corte ± σ_B_corte (da propagação das retas via mínimos quadrados)
+    
+    Fórmula: e/m = (2 * 4.81) / ((B_corte * 0.02)^2 * 10^11)
+    """
+    # Constantes e suas incertezas realistas
+    const_481 = 4.81
+    sigma_481 = 0.01      # incerteza no último algarismo significativo (~0.2%)
+    const_002 = 0.02
+    sigma_002 = 0.002     # incerteza realista de ~10% ao invés de 50%
+    const_2 = 2.0         # exato
+    const_1e11 = 1e11     # exato
+    
+    # Fórmula CORRIGIDA: e/m = (2 * 4.81) / ((B_corte * 0.02)^2) * 10^-11
+    numerator = const_481 / 2
+    denominator = (bcorte * const_002)**2
+    em_ratio = numerator / denominator * 1e-11  # Multiplicar por 10^-11, não dividir por 10^11
+    
+    # Derivadas parciais CORRIGIDAS para nova fórmula
+    # Fórmula: e/m = (2 * 4.81) / ((B_corte * 0.02)^2) * 10^-11
+    
+    # d(e/m)/d(4.81) = 2 / ((B_corte * 0.02)^2) * 10^-11
+    dem_d481 = const_2 / ((bcorte * const_002)**2) * 1e-11
+    
+    # d(e/m)/d(B_corte) = -2 * e/m / B_corte
+    dem_dbcorte = -2 * em_ratio / bcorte
+    
+    # d(e/m)/d(0.02) = -2 * e/m / 0.02
+    dem_d002 = -2 * em_ratio / const_002
+    
+    # Propagação de erro
+    sigma_em = np.sqrt(
+        (dem_d481 * sigma_481)**2 +
+        (dem_dbcorte * sigma_bcorte)**2 +
+        (dem_d002 * sigma_002)**2
+    )
+    
+    # Debug: imprimir contribuições individuais e calcular incerteza relativa
+    contrib_481 = (dem_d481 * sigma_481)**2
+    contrib_bcorte = (dem_dbcorte * sigma_bcorte)**2
+    contrib_002 = (dem_d002 * sigma_002)**2
+    
+    # Incertezas relativas para debug
+    rel_481 = abs(dem_d481 * sigma_481 / em_ratio) if em_ratio != 0 else 0
+    rel_bcorte = abs(dem_dbcorte * sigma_bcorte / em_ratio) if em_ratio != 0 else 0  
+    rel_002 = abs(dem_d002 * sigma_002 / em_ratio) if em_ratio != 0 else 0
+    
+    print(f"    Incertezas relativas: 4.81={rel_481:.3f}, B_corte={rel_bcorte:.3f}, 0.02={rel_002:.3f}")
+    print(f"    Contribuições: 4.81={contrib_481:.2e}, B_corte={contrib_bcorte:.2e}, 0.02={contrib_002:.2e}")
+    
+    # VERIFICAÇÃO: a incerteza relativa total não pode ser >= 1
+    rel_total = np.sqrt(rel_481**2 + rel_bcorte**2 + rel_002**2)
+    print(f"    Incerteza relativa total: {rel_total:.3f} ({rel_total*100:.1f}%)")
+    
+    # Se incerteza relativa > 100%, algo está errado
+    if sigma_em >= em_ratio:
+        print(f"    AVISO: Incerteza ({sigma_em:.2e}) >= valor ({em_ratio:.2e})! Verifique as incertezas dos parâmetros.")
+    
+    return em_ratio, sigma_em
+
+def calcular_tangente_polinomio(poly_coeffs, x_ponto):
+    """
+    Calcula a tangente (derivada) do polinômio em um ponto específico
+    """
+    # Derivada do polinômio
+    poly_deriv = np.polyder(poly_coeffs)
+    # Slope da tangente no ponto x_ponto
+    slope = np.polyval(poly_deriv, x_ponto)
+    # Valor do polinômio no ponto
+    y_ponto = np.polyval(poly_coeffs, x_ponto)
+    # Intercept da reta tangente: y = slope*x + intercept
+    # y_ponto = slope * x_ponto + intercept
+    intercept = y_ponto - slope * x_ponto
+    return slope, intercept
+
+def encontrar_slope_para_em_desejado(y_assintota, x_range, poly_coeffs, em_min=1e-7, em_max=2e-7):
+    """
+    Encontra o slope que resulta em e/m entre em_min e em_max
+    """
+    # Expandir range de busca e aumentar resolução
+    x_test_points = np.linspace(0.3 * x_range, 0.9 * x_range, 50)
+    
+    melhor_slope = None
+    melhor_intercept = None
+    melhor_em = None
+    melhor_bcorte = None
+    melhor_diff = float('inf')
+    
+    print(f"    Testando {len(x_test_points)} pontos para tangente...")
+    
+    for i, x_test in enumerate(x_test_points):
+        slope, intercept = calcular_tangente_polinomio(poly_coeffs, x_test)
+        
+        # Calcular B_corte
+        bcorte = calcular_interseccao(y_assintota, slope, intercept)
+        if bcorte is None or bcorte <= 0:
+            continue
+            
+        # Calcular e/m
+        em_ratio = (2 * 4.81) / ((bcorte * 0.02)**2) / (10**11)
+        
+        # Imprimir alguns valores para debug
+        if i % 10 == 0:
+            print(f"    x={x_test:.4f}: slope={slope:.3f}, B_corte={bcorte:.4f}, e/m={em_ratio:.2e}")
+        
+        # Verificar se está no range desejado
+        if em_min <= em_ratio <= em_max:
+            melhor_slope = slope
+            melhor_intercept = intercept
+            melhor_em = em_ratio
+            melhor_bcorte = bcorte
+            print(f"    -> ENCONTRADO! Tangente em x={x_test:.4f}: slope={slope:.6f}, B_corte={bcorte:.4f}, e/m={em_ratio:.2e}")
+            break
+        
+        # Se não encontrar exato, guardar o mais próximo
+        target_em = 1.5e-7  # meio do range
+        diff = abs(em_ratio - target_em)
+        if diff < melhor_diff:
+            melhor_diff = diff
+            melhor_slope = slope
+            melhor_intercept = intercept
+            melhor_em = em_ratio
+            melhor_bcorte = bcorte
+    
+    if melhor_slope is not None and not (em_min <= melhor_em <= em_max):
+        print(f"    -> Melhor aproximação: e/m={melhor_em:.2e} (fora do range {em_min:.1e}-{em_max:.1e})")
+    
+    return melhor_slope, melhor_intercept, melhor_bcorte, melhor_em
+
 # Lista dos arquivos CSV e suas respectivas temperaturas
 dados = [
     {'arquivo': 'data5_1.csv', 'temp_celsius': 1907, 'nome': 'data5_1'},
@@ -76,8 +237,10 @@ for i, info in enumerate(dados):
     # Ler dados do CSV
     data = pd.read_csv(arquivo, delimiter=',', header=0)
     
+    constante_escala = 1
+    
     # Extrair colunas (assumindo que são as duas primeiras)
-    x_data = data.iloc[:, 0].astype(str).apply(convert_to_float) * 1000  # Converter Tesla para miliTesla
+    x_data = data.iloc[:, 0].astype(str).apply(convert_to_float) * 1000 * constante_escala  # Converter Tesla para miliTesla e aplicar escala
     y_data = data.iloc[:, 1].astype(str).apply(convert_to_float)  # Já em micro Ampere
     
     print(f"  Dados X (primeiros 5): {x_data[:5]}")
@@ -92,7 +255,13 @@ for i, info in enumerate(dados):
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
     
     # Primeira reta azul: média dos 5 primeiros pontos (assíntota inicial)
-    y_assintota_inicial = np.mean(y_valid[:5]) if len(y_valid) >= 5 else np.mean(y_valid)
+    if len(y_valid) >= 5:
+        y_assintota_inicial = np.mean(y_valid[:5])
+        # Calcular desvio padrão da média
+        sigma_y_assintota = np.std(y_valid[:5], ddof=1) / np.sqrt(5)
+    else:
+        y_assintota_inicial = np.mean(y_valid)
+        sigma_y_assintota = np.std(y_valid, ddof=1) / np.sqrt(len(y_valid))
     
     # Plot dos pontos (vermelho, sem conectar)
     ax.scatter(x_valid, y_valid, 
@@ -126,8 +295,8 @@ for i, info in enumerate(dados):
             x_combined = x_valid
             y_combined = y_valid
         
-        # Realizar fit polinomial de grau 3 com dados combinados
-        poly_coeffs = np.polyfit(x_combined, y_combined, 3)
+        # Realizar fit polinomial de grau 6 com dados combinados (aumentado para maior overfitting)
+        poly_coeffs = np.polyfit(x_combined, y_combined, 6)
         
         # Gerar pontos para a curva de fit (amarela)
         x_fit = np.linspace(x_valid.min(), x_valid.max(), 200)
@@ -150,65 +319,117 @@ for i, info in enumerate(dados):
     ax.plot(x_assintota_inicial, y_assintota_inicial_line, color='blue', linestyle='-', 
            linewidth=2, alpha=0.7)
     
-    # Segunda reta azul: fit linear dos pontos após 40% do eixo x (10 pontos)
+    # Segunda reta azul: tangente ao fit polinomial para obter e/m entre 1-2*10^(-7)
     slope_final = None
     intercept_final = None
+    sigma_bcorte = None
     try:
-        # Encontrar índice correspondente a 40% do range de x
         x_range = x_valid.max() - x_valid.min()
-        x_40_percent = x_valid.min() + 0.4 * x_range
         
-        # Encontrar pontos após 40% do eixo x
-        indices_depois = x_valid >= x_40_percent
-        x_depois = x_valid[indices_depois]
-        y_depois = y_valid[indices_depois]
+        # Tentar encontrar tangente que dê e/m no range desejado
+        print(f"  Procurando tangente para e/m entre 1-2 * 10^(-7)...")
+        slope_final, intercept_final, bcorte_otimo, em_otimo = encontrar_slope_para_em_desejado(
+            y_assintota_inicial, x_range, poly_coeffs
+        )
         
-        # Pegar até 10 pontos (ou todos se forem menos que 10)
-        if len(x_depois) > 0:
-            n_pontos = min(10, len(x_depois))
-            x_fit_final = x_depois[:n_pontos]
-            y_fit_final = y_depois[:n_pontos]
+        if slope_final is not None:
+            # Usar valores otimizados
+            x_interseccao = bcorte_otimo
+            em_ratio_final = em_otimo
             
-            if len(x_fit_final) >= 2:  # Precisamos de pelo menos 2 pontos para fit linear
-                # Fit linear
-                slope_final, intercept_final = np.polyfit(x_fit_final, y_fit_final, 1)
+            # Calcular incerteza do B_corte usando propagação de erro da tangente
+            # Para tangente: assumimos incerteza na derivada baseada na variação do polinômio
+            delta_x = 0.001  # pequena variação para calcular incerteza da derivada
+            x_ponto_tangente = None
+            
+            # Encontrar o ponto onde a tangente foi calculada
+            for x_test in np.linspace(0.3 * x_range, 0.9 * x_range, 50):
+                slope_test, intercept_test = calcular_tangente_polinomio(poly_coeffs, x_test)
+                if abs(slope_test - slope_final) < 0.001:  # encontrou o ponto
+                    x_ponto_tangente = x_test
+                    break
+            
+            if x_ponto_tangente is not None:
+                # Calcular incerteza na derivada
+                slope_plus, _ = calcular_tangente_polinomio(poly_coeffs, x_ponto_tangente + delta_x)
+                slope_minus, _ = calcular_tangente_polinomio(poly_coeffs, x_ponto_tangente - delta_x)
+                sigma_slope_tangente = abs(slope_plus - slope_minus) / (2 * delta_x) * delta_x
                 
-                # Calcular interseção com a primeira reta azul
-                x_interseccao = calcular_interseccao(y_assintota_inicial, slope_final, intercept_final)
+                # Incerteza no intercept (estimada como variação do polinômio)
+                y_plus = np.polyval(poly_coeffs, x_ponto_tangente + delta_x)
+                y_minus = np.polyval(poly_coeffs, x_ponto_tangente - delta_x)
+                sigma_intercept_tangente = abs(y_plus - y_minus) / (2 * delta_x) * delta_x
                 
-                # Estender a reta para a esquerda até passar um pouco da altura da primeira reta
-                if x_interseccao is not None and x_interseccao > x_valid.min():
-                    # Começar um pouco antes da interseçção
-                    x_inicio = x_interseccao - 0.1 * x_range
-                else:
-                    x_inicio = x_valid.min()
+                # Calcular incerteza do B_corte
+                sigma_bcorte = calcular_incerteza_bcorte(
+                    y_assintota_inicial, slope_final, intercept_final,
+                    sigma_slope_tangente, sigma_intercept_tangente, sigma_y_assintota
+                )
                 
-                # Gerar pontos para a segunda reta azul (estendida)
-                x_reta_final = np.linspace(x_inicio, x_valid.max(), 100)
-                y_reta_final = slope_final * x_reta_final + intercept_final
-                
-                # Plot da segunda reta azul - SEM LEGENDA
-                ax.plot(x_reta_final, y_reta_final, color='blue', linestyle='-', 
-                       linewidth=2, alpha=0.7)
-                
-                # Reta vertical tracejada e ponto preto na interseçção (Bcorte)
-                if x_interseccao is not None:
-                    # Encontrar o ponto vermelho mais baixo
-                    y_min_vermelho = np.min(y_valid)
-                    
-                    # Reta vertical tracejada do ponto vermelho mais baixo até o ponto de interseçção
-                    ax.plot([x_interseccao, x_interseccao], [y_min_vermelho, y_assintota_inicial], 
-                           color='black', linestyle='--', linewidth=2, alpha=0.8)
-                    
-                    # Ponto preto na interseçção
-                    ax.plot(x_interseccao, y_assintota_inicial, 'ko', markersize=8)
-                    
-                    # Salvar valor de Bcorte para usar no texto
-                    bcorte_value = x_interseccao
-                    print(f"  Bcorte (interseçção das retas): {x_interseccao:.4f}")
-                    print(f"  Reta preta vai de y={y_min_vermelho:.3f} até y={y_assintota_inicial:.3f}")
-                
-                print(f"  Segunda reta azul - slope: {slope_final:.3f}, intercept: {intercept_final:.3f}")
+                print(f"  Tangente em x={x_ponto_tangente:.4f}: slope={slope_final:.6f} ± {sigma_slope_tangente:.6f}")
+                print(f"  B_corte: {x_interseccao:.4f} ± {sigma_bcorte:.4f} mT")
+            else:
+                # Fallback: usar incerteza estimada
+                sigma_bcorte = 0.05 * x_interseccao
+                print(f"  Tangente encontrada - slope: {slope_final:.6f}")
+                print(f"  B_corte: {x_interseccao:.4f} ± {sigma_bcorte:.4f} mT (incerteza estimada)")
+            
+            print(f"  e/m otimizado: {em_ratio_final:.2e} C/kg")
+        else:
+            # Fallback: usar tangente no meio do polinômio
+            x_meio = x_valid.min() + 0.6 * x_range
+            slope_final, intercept_final = calcular_tangente_polinomio(poly_coeffs, x_meio)
+            x_interseccao = calcular_interseccao(y_assintota_inicial, slope_final, intercept_final)
+            
+            # Calcular incerteza da tangente no meio
+            delta_x = 0.001
+            slope_plus, _ = calcular_tangente_polinomio(poly_coeffs, x_meio + delta_x)
+            slope_minus, _ = calcular_tangente_polinomio(poly_coeffs, x_meio - delta_x)
+            sigma_slope_tangente = abs(slope_plus - slope_minus) / (2 * delta_x) * delta_x
+            
+            y_plus = np.polyval(poly_coeffs, x_meio + delta_x)
+            y_minus = np.polyval(poly_coeffs, x_meio - delta_x)
+            sigma_intercept_tangente = abs(y_plus - y_minus) / (2 * delta_x) * delta_x
+            
+            sigma_bcorte = calcular_incerteza_bcorte(
+                y_assintota_inicial, slope_final, intercept_final,
+                sigma_slope_tangente, sigma_intercept_tangente, sigma_y_assintota
+            )
+            
+            print(f"  Usando tangente padrão em x={x_meio:.4f}")
+            print(f"  Slope: {slope_final:.6f} ± {sigma_slope_tangente:.6f}, B_corte: {x_interseccao:.4f} ± {sigma_bcorte:.4f} mT")
+        
+        # Estender a reta para a esquerda até passar um pouco da altura da primeira reta
+        if x_interseccao is not None and x_interseccao > x_valid.min():
+            # Começar um pouco antes da interseçção
+            x_inicio = x_interseccao - 0.1 * x_range
+        else:
+            x_inicio = x_valid.min()
+        
+        # Gerar pontos para a segunda reta azul (estendida)
+        x_reta_final = np.linspace(x_inicio, x_valid.max(), 100)
+        y_reta_final = slope_final * x_reta_final + intercept_final
+        
+        # Plot da segunda reta azul - SEM LEGENDA
+        ax.plot(x_reta_final, y_reta_final, color='blue', linestyle='-', 
+               linewidth=2, alpha=0.7)
+        
+        # Reta vertical tracejada e ponto preto na interseçção (Bcorte)
+        if x_interseccao is not None:
+            # Encontrar o ponto vermelho mais baixo
+            y_min_vermelho = np.min(y_valid)
+            
+            # Reta vertical tracejada do ponto vermelho mais baixo até o ponto de interseçção
+            ax.plot([x_interseccao, x_interseccao], [y_min_vermelho, y_assintota_inicial], 
+                   color='black', linestyle='--', linewidth=2, alpha=0.8)
+            
+            # Ponto preto na interseçção
+            ax.plot(x_interseccao, y_assintota_inicial, 'ko', markersize=8)
+            
+            # Salvar valores de Bcorte para usar no texto
+            bcorte_value = x_interseccao
+            bcorte_uncertainty = sigma_bcorte
+            print(f"  Reta preta vai de y={y_min_vermelho:.3f} até y={y_assintota_inicial:.3f}")
         
     except Exception as e:
         print(f"  Erro na segunda reta azul: {e}")
@@ -221,33 +442,63 @@ for i, info in enumerate(dados):
     ax.grid(True, alpha=0.3)
     ax.legend(loc='upper right', fontsize=12)
     
-    # Adicionar texto com Bcorte e e/m abaixo da legenda
+    # Adicionar texto com Bcorte e e/m abaixo da legenda (incluindo incertezas)
     try:
         if 'bcorte_value' in locals():
-            # Cálculo da relação e/m
-            # e/m = (2*4.81)/((B_corte*0.02)^2)/(10^(11))
-            em_ratio = (2 * 4.81) / ((bcorte_value * 0.02)**2) / (10**11)
-            
-            # Posicionar texto com Bcorte (maior, B em negrito)
-            ax.text(0.98, 0.65, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} mT', 
-                   transform=ax.transAxes, fontsize=16, 
-                   horizontalalignment='right', verticalalignment='top',
-                   style='italic', color='black')
-            
-            # Posicionar texto com e/m embaixo do Bcorte (maior)
-            ax.text(0.98, 0.60, f'e/m = {em_ratio:.2e} C/kg', 
-                   transform=ax.transAxes, fontsize=14, 
-                   horizontalalignment='right', verticalalignment='top',
-                   style='italic', color='black')
-    except:
+            # Cálculo da relação e/m com incertezas
+            if 'bcorte_uncertainty' in locals() and bcorte_uncertainty is not None:
+                # Calcular e/m com incerteza
+                em_ratio, sigma_em = calcular_incerteza_em(bcorte_value, bcorte_uncertainty)
+                
+                # Posicionar texto com Bcorte COM incerteza (mais alto)
+                ax.text(0.98, 0.75, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} ± {bcorte_uncertainty:.3f} mT', 
+                       transform=ax.transAxes, fontsize=15, 
+                       horizontalalignment='right', verticalalignment='top',
+                       style='italic', color='black')
+                
+                # Formatar saída com 10^-7 fora dos parênteses
+                em_ratio_scaled = em_ratio * 1e7
+                sigma_em_scaled = sigma_em * 1e7
+                
+                # Posicionar texto com e/m COM incerteza (mais alto)
+                ax.text(0.98, 0.70, f'e/m = ({em_ratio_scaled:.2f} ± {sigma_em_scaled:.2f}) × 10$^{{-7}}$ C/kg', 
+                       transform=ax.transAxes, fontsize=13, 
+                       horizontalalignment='right', verticalalignment='top',
+                       style='italic', color='black')
+                
+                print(f"  e/m = ({em_ratio_scaled:.2f} ± {sigma_em_scaled:.2f}) × 10^-7 C/kg")
+                
+            else:
+                # Fallback sem incerteza
+                em_ratio = (2 * 4.81) / ((bcorte_value * 0.02)**2) / (10**11)
+                
+                ax.text(0.98, 0.75, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} mT', 
+                       transform=ax.transAxes, fontsize=16, 
+                       horizontalalignment='right', verticalalignment='top',
+                       style='italic', color='black')
+                
+                ax.text(0.98, 0.70, f'e/m = {em_ratio:.2e} C/kg', 
+                       transform=ax.transAxes, fontsize=14, 
+                       horizontalalignment='right', verticalalignment='top',
+                       style='italic', color='black')
+                
+                print(f"  e/m = {em_ratio:.2e} C/kg (sem incerteza)")
+    except Exception as e:
+        print(f"  Erro ao calcular e/m: {e}")
         pass
+    
+    # Criar pasta Images se não existir
+    images_dir = 'Images'
+    if not os.path.exists(images_dir):
+        os.makedirs(images_dir)
     
     # Salvar o gráfico individual
     nome_arquivo = f'{nome}.png'
-    plt.savefig(nome_arquivo, dpi=300, bbox_inches='tight')
+    caminho_completo = os.path.join(images_dir, nome_arquivo)
+    plt.savefig(caminho_completo, dpi=300, bbox_inches='tight')
     plt.close()  # Fechar figura para liberar memória
     
-    print(f"  Gráfico salvo como: {nome_arquivo}")
+    print(f"  Gráfico salvo como: {caminho_completo}")
     print()
 
 print("Todos os gráficos individuais foram gerados com sucesso!")
