@@ -5,7 +5,7 @@ from scipy import stats
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 16.8
 
 # Função para converter strings com vírgula para float
 def convert_to_float(value):
@@ -82,23 +82,23 @@ if len(x_valid) > 1:
            label='Ajuste linear')
 
 # Configurar o gráfico
-ax.set_xlabel('1/T (1/K)', fontsize=14)
-ax.set_ylabel(y_label, fontsize=14)
-ax.set_title('Descobrindo W do Tungstênio', fontsize=16, pad=20)
+ax.set_xlabel('1/T (1/K)', fontsize=32.032)
+ax.set_ylabel(y_label, fontsize=32.032)
+ax.set_title('Descobrindo W do Tungstênio', fontsize=32.032, pad=20)
 
 # Configurar a legenda no topo esquerdo
-ax.legend(loc='upper right', frameon=True, fancybox=True, shadow=True)
+ax.legend(loc='center right', frameon=True, fancybox=True, shadow=True, fontsize=19.76)
 
 # Adicionar equação da reta e valor de W em itálico
 if len(x_valid) > 1:
     equation_text = f'Coef. lin. y = {slope:.4f}x + {intercept:.4f}'
     ax.text(0.98, 0.85, equation_text, transform=ax.transAxes, 
-            fontsize=16, style='italic', ha='right', color='black')
+            fontsize=22.4, style='italic', ha='right', color='black')
     
     # Adicionar valor de W com incerteza
     W_text = f'W = ({W_value:.4f} ± {W_uncertainty:.4f}) eV'
     ax.text(0.98, 0.80, W_text, transform=ax.transAxes, 
-            fontsize=16, style='italic', ha='right', color='black')
+            fontsize=22.4, style='italic', ha='right', color='black')
 
 # Configurar grade
 ax.grid(True, alpha=0.3)

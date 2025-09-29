@@ -8,7 +8,7 @@ import os
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 16.8
 
 # Função para converter strings com vírgula para float
 def convert_to_float(value):
@@ -435,12 +435,12 @@ for i, info in enumerate(dados):
         print(f"  Erro na segunda reta azul: {e}")
     
     # Configurar o gráfico com novos rótulos
-    ax.set_xlabel('Campo Magnético (mT)', fontsize=14)
-    ax.set_ylabel('Corrente entre elétrons (μA)', fontsize=14)
+    ax.set_xlabel('Campo Magnético (mT)', fontsize=32.032)
+    ax.set_ylabel('Corrente entre elétrons (μA)', fontsize=32.032)
     ax.set_title(f'Determinação do Campo Magnético de corte $\\mathbf{{B}}_{{corte}}$\nT = {temp_kelvin} K', 
-                fontsize=16, pad=20)
+                fontsize=32.032, pad=20)
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=12)
+    ax.legend(loc='upper right', fontsize=19.76)
     
     # Adicionar texto com Bcorte e e/m abaixo da legenda (incluindo incertezas)
     try:
@@ -451,9 +451,9 @@ for i, info in enumerate(dados):
                 em_ratio, sigma_em = calcular_incerteza_em(bcorte_value, bcorte_uncertainty)
                 
                 # Posicionar texto com Bcorte COM incerteza (mais alto)
-                ax.text(0.98, 0.75, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} ± {bcorte_uncertainty:.3f} mT', 
-                       transform=ax.transAxes, fontsize=15, 
-                       horizontalalignment='right', verticalalignment='top',
+                ax.text(0.02, 0.30, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} ± {bcorte_uncertainty:.3f} mT', 
+                       transform=ax.transAxes, fontsize=21, 
+                       horizontalalignment='left', verticalalignment='bottom',
                        style='italic', color='black')
                 
                 # Formatar saída com 10^-7 fora dos parênteses
@@ -461,9 +461,9 @@ for i, info in enumerate(dados):
                 sigma_em_scaled = sigma_em * 1e7
                 
                 # Posicionar texto com e/m COM incerteza (mais alto)
-                ax.text(0.98, 0.70, f'e/m = ({em_ratio_scaled:.2f} ± {sigma_em_scaled:.2f}) × 10$^{{-7}}$ C/kg', 
-                       transform=ax.transAxes, fontsize=13, 
-                       horizontalalignment='right', verticalalignment='top',
+                ax.text(0.02, 0.25, f'e/m = ({em_ratio_scaled:.2f} ± {sigma_em_scaled:.2f}) × 10$^{{-7}}$ C/kg', 
+                       transform=ax.transAxes, fontsize=18.2, 
+                       horizontalalignment='left', verticalalignment='bottom',
                        style='italic', color='black')
                 
                 print(f"  e/m = ({em_ratio_scaled:.2f} ± {sigma_em_scaled:.2f}) × 10^-7 C/kg")
@@ -472,14 +472,14 @@ for i, info in enumerate(dados):
                 # Fallback sem incerteza
                 em_ratio = (2 * 4.81) / ((bcorte_value * 0.02)**2) / (10**11)
                 
-                ax.text(0.98, 0.75, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} mT', 
-                       transform=ax.transAxes, fontsize=16, 
-                       horizontalalignment='right', verticalalignment='top',
+                ax.text(0.02, 0.30, f'$\\mathbf{{B}}_{{corte}}$ = {bcorte_value:.3f} mT', 
+                       transform=ax.transAxes, fontsize=22.4, 
+                       horizontalalignment='left', verticalalignment='bottom',
                        style='italic', color='black')
                 
-                ax.text(0.98, 0.70, f'e/m = {em_ratio:.2e} C/kg', 
-                       transform=ax.transAxes, fontsize=14, 
-                       horizontalalignment='right', verticalalignment='top',
+                ax.text(0.02, 0.25, f'e/m = {em_ratio:.2e} C/kg', 
+                       transform=ax.transAxes, fontsize=19.76, 
+                       horizontalalignment='left', verticalalignment='bottom',
                        style='italic', color='black')
                 
                 print(f"  e/m = {em_ratio:.2e} C/kg (sem incerteza)")

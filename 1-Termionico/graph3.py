@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 16.8
 
 # Função para converter strings com vírgula para float
 def convert_to_float(value):
@@ -91,19 +91,19 @@ if len(x_valid) > 3:
         fit_success = False
 
 # Configurar o gráfico
-ax.set_xlabel(x_label, fontsize=14)
-ax.set_ylabel(y_label, fontsize=14)
+ax.set_xlabel(x_label, fontsize=19.76)
+ax.set_ylabel(y_label, fontsize=19.76)
 
 # Criar título com informações do ajuste exponencial
 if len(x_valid) > 3 and fit_success:
     # Formatear a equação exponencial
     eq_str = f"y = {a:.2e}·exp({b:.2e}·x) + {c:.2e}"
-    ax.set_title('Verificando Lei de Richardson-Dushman', fontsize=16, pad=20)
+    ax.set_title('Verificando Lei de Richardson-Dushman', fontsize=22.4, pad=20)
 else:
-    ax.set_title('Verificando Lei de Richardson-Dushman', fontsize=16, pad=20)
+    ax.set_title('Verificando Lei de Richardson-Dushman', fontsize=22.4, pad=20)
 
 # Configurar a legenda
-ax.legend(loc='best', frameon=True, fancybox=True, shadow=True)
+ax.legend(loc='best', frameon=True, fancybox=True, shadow=True, fontsize=19.76)
 
 # Configurar grade
 ax.grid(True, alpha=0.3)

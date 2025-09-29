@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 16.8
 
 # Ler os dados do CSV
 df = pd.read_csv('data.csv', delimiter=',', decimal=',')
@@ -123,19 +123,19 @@ for i, temp in enumerate(temperaturas):
                   label=f'T = {temp:.0f} K (poucos pontos)')
 
 # Configurar o gráfico
-ax.set_xlabel('Tensão (V)', fontsize=14)
-ax.set_ylabel('Corrente (mA)', fontsize=14)
-ax.set_title('Corrente vs Tensão para diferentes temperaturas', fontsize=16, pad=20)
+ax.set_xlabel('Tensão (V)', fontsize=32.032)
+ax.set_ylabel('Corrente (mA)', fontsize=32.032)
+ax.set_title('Corrente vs Tensão para diferentes temperaturas', fontsize=32.032, pad=20)
 
 # Configurar a legenda
-ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
+ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True, fontsize=19.76)
 
 # Configurar grade
 ax.grid(True, alpha=0.3)
 
 # Configurar limites dos eixos para melhor visualização
 ax.set_xlim(0, max(tensao) * 1.05)
-ax.set_ylim(0, None)
+ax.set_ylim(0, max(corrente) * 1.4)
 
 # Melhorar o layout
 plt.tight_layout()

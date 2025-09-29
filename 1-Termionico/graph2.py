@@ -5,7 +5,7 @@ from scipy import stats
 
 # Configurar matplotlib para melhor visualização
 plt.rcParams['figure.figsize'] = (10, 8)
-plt.rcParams['font.size'] = 12
+plt.rcParams['font.size'] = 16.8
 
 # Função para converter strings com vírgula para float
 def convert_to_float(value):
@@ -62,24 +62,24 @@ if len(x_valid) > 1:
            label='Fit linear')
 
 # Configurar o gráfico
-ax.set_xlabel(x_label, fontsize=14)
-ax.set_ylabel(y_label, fontsize=14)
-ax.set_title('Verificação da lei de Child-Langmuir', fontsize=16, pad=20)
+ax.set_xlabel(x_label, fontsize=32.032)
+ax.set_ylabel(y_label, fontsize=32.032)
+ax.set_title('Verificação da lei de Child-Langmuir', fontsize=32.032, pad=20)
 
 # Configurar a legenda no topo esquerdo
-ax.legend(loc='upper left', frameon=True, fancybox=True, shadow=True)
+ax.legend(loc='center left', frameon=True, fancybox=True, shadow=True, fontsize=19.76)
 
 # Adicionar equação da reta em itálico abaixo da legenda
 if len(x_valid) > 1:
     # Primeira linha: equação
     equation_text = f'y = {slope:.4f}x - {-intercept:.4f}'
     ax.text(0.02, 0.85, equation_text, transform=ax.transAxes, 
-            fontsize=16, style='italic', color='black')
+            fontsize=22.4, style='italic', color='black')
     
     # Segunda linha: coeficiente linear com incerteza
     coef_text = f'Coef. lin. {slope:.4f} ± {std_err:.4f}'
     ax.text(0.02, 0.80, coef_text, transform=ax.transAxes, 
-            fontsize=16, style='italic', color='black')
+            fontsize=22.4, style='italic', color='black')
 
 # Configurar grade
 ax.grid(True, alpha=0.3)
