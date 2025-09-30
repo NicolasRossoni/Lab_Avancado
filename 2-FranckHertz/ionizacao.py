@@ -132,7 +132,7 @@ def generate_graph(all_data, output_dir):
         corrente_sorted = corrente_scaled[sort_idx]
         
         # Legenda apenas com temperatura
-        label = f'{temp_celsius} °C'
+        label = f'{temp_celsius}'
         
         # Plot dos dados conectados por linhas simples
         ax.plot(tensao_sorted, corrente_sorted, 

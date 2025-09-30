@@ -143,7 +143,8 @@ def generate_graph(data_list, graph_type, temp_folder, temp_celsius, output_dir,
         data_list.sort(key=lambda x: x['v4'])
     
     fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-    cores = ['green', 'darkgreen', 'olive', 'orange', 'orangered', 'red', 'darkred', 'blue', 'darkblue']
+    # Cores para cada curva (similar ao graph.py)
+    cores = ['blue', 'green', 'red', 'orange', 'yellow', 'purple', 'brown', 'pink', 'gray', 'olive']
     
     for i, data in enumerate(data_list):
         tensao_valid = data['tensao']

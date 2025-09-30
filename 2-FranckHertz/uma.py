@@ -131,7 +131,7 @@ def generate_graph_for_coef(data_list, coef_dir, output_dir):
         color = cores[i % len(cores)]
         
         # Aplicar conversão para nanoampères: dado * coef * 1e9
-        corrente_scaled = corrente_valid * coef_value * 1e9
+        corrente_scaled = corrente_valid * coef_value * 1e9 / 100
         
         # Ordenar por tensão para conexão correta
         sort_idx = np.argsort(tensao_valid)
