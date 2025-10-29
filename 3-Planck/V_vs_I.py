@@ -575,7 +575,7 @@ def generate_final_table(
     max_rows = max(len(results_left), len(results_center), len(results_right))
     
     # Cria figura com três subtabelas (mais compacta)
-    fig = plt.figure(figsize=(15, max_rows * 0.35 + 1.5))
+    fig = plt.figure(figsize=(8, max_rows * 0.35 + 1.5))
     
     # Título geral
     fig.suptitle('Tabela Final - Todos os Valores de h', fontsize=14, weight='bold', y=0.97)
@@ -595,15 +595,15 @@ def generate_final_table(
         colLabels=["Label", "h (×10⁻³⁴ J·s)"],
         cellLoc='center',
         loc='center',
-        colWidths=[0.3, 0.7]
+        colWidths=[0.5, 0.5]
     )
     table_left.auto_set_font_size(False)
-    table_left.set_fontsize(8)
+    table_left.set_fontsize(9)
     table_left.scale(1, 1.6)
     
     for i in range(2):
         table_left[(0, i)].set_facecolor('#4472C4')
-        table_left[(0, i)].set_text_props(weight='bold', color='white', fontsize=9)
+        table_left[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
     
     # Subtabela centro
     ax_center = fig.add_subplot(1, 3, 2)
@@ -624,15 +624,15 @@ def generate_final_table(
         colLabels=["Label", "h (×10⁻³⁴ J·s)"],
         cellLoc='center',
         loc='center',
-        colWidths=[0.3, 0.7]
+        colWidths=[0.5, 0.5]
     )
     table_center.auto_set_font_size(False)
-    table_center.set_fontsize(8)
+    table_center.set_fontsize(9)
     table_center.scale(1, 1.6)
     
     for i in range(2):
         table_center[(0, i)].set_facecolor('#4472C4')
-        table_center[(0, i)].set_text_props(weight='bold', color='white', fontsize=9)
+        table_center[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
     
     # Subtabela direita
     ax_right = fig.add_subplot(1, 3, 3)
@@ -653,15 +653,15 @@ def generate_final_table(
         colLabels=["Label", "h (×10⁻³⁴ J·s)"],
         cellLoc='center',
         loc='center',
-        colWidths=[0.3, 0.7]
+        colWidths=[0.5, 0.5]
     )
     table_right.auto_set_font_size(False)
-    table_right.set_fontsize(8)
+    table_right.set_fontsize(9)
     table_right.scale(1, 1.6)
     
     for i in range(2):
         table_right[(0, i)].set_facecolor('#4472C4')
-        table_right[(0, i)].set_text_props(weight='bold', color='white', fontsize=9)
+        table_right[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
     
     # Calcula estatísticas
     h_mean = np.mean(all_h_values)
