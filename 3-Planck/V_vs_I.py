@@ -605,6 +605,14 @@ def generate_final_table(
         table_left[(0, i)].set_facecolor('#4472C4')
         table_left[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
     
+    # Aplica fundo cinza em labels específicos
+    gray_labels = ['vermelho1', 'vermelho7', 'vermelho2', 'laranja4', 'laranja1', 
+                   'verde3', 'verde1', 'azul4', 'azul1', 'azul5', 'azul0']
+    for row_idx, (label, _) in enumerate(results_left, start=1):
+        if label in gray_labels:
+            for col_idx in range(2):
+                table_left[(row_idx, col_idx)].set_facecolor('#D0D0D0')
+    
     # Subtabela centro
     ax_center = fig.add_subplot(1, 3, 2)
     ax_center.axis('tight')
@@ -634,6 +642,12 @@ def generate_final_table(
         table_center[(0, i)].set_facecolor('#4472C4')
         table_center[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
     
+    # Aplica fundo cinza em labels específicos
+    for row_idx, (label, _) in enumerate(results_center, start=1):
+        if label in gray_labels:
+            for col_idx in range(2):
+                table_center[(row_idx, col_idx)].set_facecolor('#D0D0D0')
+    
     # Subtabela direita
     ax_right = fig.add_subplot(1, 3, 3)
     ax_right.axis('tight')
@@ -662,6 +676,12 @@ def generate_final_table(
     for i in range(2):
         table_right[(0, i)].set_facecolor('#4472C4')
         table_right[(0, i)].set_text_props(weight='bold', color='white', fontsize=10)
+    
+    # Aplica fundo cinza em labels específicos
+    for row_idx, (label, _) in enumerate(results_right, start=1):
+        if label in gray_labels:
+            for col_idx in range(2):
+                table_right[(row_idx, col_idx)].set_facecolor('#D0D0D0')
     
     # Calcula estatísticas
     h_mean = np.mean(all_h_values)
