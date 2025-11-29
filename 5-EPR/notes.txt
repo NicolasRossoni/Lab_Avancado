@@ -1,0 +1,20 @@
+Sonda hall:
+
+pedir para o claude colocar a incerteza nos pontos do grafico 
+e a formula em latex da equacao analitica tmb
+
+=====================
+EPR-DFPH:
+
+  Valores de g(dFPH) obtidos:
+
+  - 15-30 MHz: g = 2.01 ± 0.07
+  - 30-60 MHz: g = 1.94 ± 0.02
+  - 45-90 MHz: g = 1.89 ± 0.03
+
+  Média: g = 1.95 ± 0.05
+  REF: g = 2.00232
+
+
+
+=====================
