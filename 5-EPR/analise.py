@@ -60,121 +60,85 @@ def load_processed_data(filepath):
 
 def calculate_fwhm(x, y, label=""):
     """
-    Calcula a largura à meia altura (FWHM) de um pico invertido (gaussiana negativa).
+    Calcula a largura à meia altura de uma gaussiana INVERTIDA (pico para baixo).
+
+    Algoritmo:
+    1. Encontra ponto de MÍNIMO (X_min, Y_min) - pico da gaussiana invertida
+    2. Calcula meia altura = Y_min / 2 (ambos negativos)
+    3. A partir do mínimo, anda para DIREITA até Y > meia_altura
+    4. A partir do mínimo, anda para ESQUERDA até Y > meia_altura
+    5. Largura = diferença em X entre os dois pontos
 
     Args:
         x: array com eixo X (tempo)
-        y: array com eixo Y (voltagem)
+        y: array com eixo Y (voltagem, negativa)
         label: rótulo para mensagens de debug
 
     Returns:
-        dict: {
-            'baseline': valor da baseline (primeiro ponto),
-            'min_value': valor mínimo (pico),
-            'min_index': índice do mínimo,
-            'peak_height': altura do pico,
-            'half_height': valor da meia-altura,
-            'left_x': coordenada X esquerda na meia-altura,
-            'right_x': coordenada X direita na meia-altura,
-            'fwhm': largura à meia altura
-        }
+        dict com informações da meia altura
     """
     print(f"\n{'─'*70}")
-    print(f"CÁLCULO FWHM - {label}")
+    print(f"CÁLCULO LARGURA À MEIA ALTURA - {label}")
     print(f"{'─'*70}")
 
-    # Baseline = primeiro ponto (após nivelamento)
-    baseline = y[0]
-
-    # Encontra o ponto mínimo (pico negativo)
+    # 1. Encontra o ponto de MÍNIMO (pico da gaussiana invertida)
     min_index = np.argmin(y)
     min_value = y[min_index]
     min_x = x[min_index]
 
-    # Altura do pico (positiva, medida da baseline até o mínimo)
-    peak_height = baseline - min_value
+    # 2. Calcula meia altura = Y_min / 2 (ambos negativos, então meia altura é menos negativa)
+    half_height = min_value / 2.0
 
-    # Meia-altura (valor de Y na meia-altura)
-    half_height = baseline - (peak_height / 2.0)
+    print(f"Ponto de mínimo (pico): Y = {min_value:.4f} V em t = {min_x*1000:.4f} ms")
+    print(f"Meia altura: {half_height:.4f} V")
 
-    print(f"Baseline (primeiro ponto): {baseline:.4f} V")
-    print(f"Pico mínimo: {min_value:.4f} V em t = {min_x*1000:.4f} ms")
-    print(f"Altura do pico: {peak_height:.4f} V")
-    print(f"Meia-altura: {half_height:.4f} V")
+    # 3. A partir do mínimo, anda para a DIREITA até Y > meia_altura
+    # (saindo do pico negativo em direção a valores menos negativos)
+    right_x = None
+    right_y = None
+    for i in range(min_index, len(y)):
+        if y[i] > half_height:
+            right_x = x[i]
+            right_y = y[i]
+            print(f"Ponto DIREITO encontrado: t = {right_x*1000:.4f} ms, Y = {right_y:.4f} V (índice {i})")
+            break
 
-    # Encontra os pontos onde a curva cruza a meia-altura
-    # Procura à esquerda e à direita do pico
+    if right_x is None:
+        # Não encontrou, usa último ponto
+        right_x = x[-1]
+        right_y = y[-1]
+        print(f"  AVISO: Não encontrou cruzamento à direita, usando último ponto")
 
-    # Lado esquerdo: do início até o pico
-    left_indices = np.where((x < min_x) & (y <= half_height))[0]
-    if len(left_indices) == 0:
-        print("  AVISO: Não encontrou cruzamento à esquerda, usando interpolação")
-        # Interpola para encontrar o ponto exato
-        left_region_x = x[:min_index]
-        left_region_y = y[:min_index]
-        if len(left_region_x) > 1:
-            f_left = interp1d(left_region_y[::-1], left_region_x[::-1],
-                            kind='linear', fill_value='extrapolate')
-            left_x = float(f_left(half_height))
-        else:
-            left_x = x[0]
-    else:
-        # Usa o último ponto antes do cruzamento e interpola
-        idx = left_indices[-1]
-        if idx + 1 < min_index:
-            # Interpolação linear entre idx e idx+1
-            x1, y1 = x[idx], y[idx]
-            x2, y2 = x[idx + 1], y[idx + 1]
-            if y2 != y1:
-                left_x = x1 + (half_height - y1) * (x2 - x1) / (y2 - y1)
-            else:
-                left_x = x1
-        else:
-            left_x = x[idx]
+    # 4. A partir do mínimo, anda para a ESQUERDA até Y > meia_altura
+    left_x = None
+    left_y = None
+    for i in range(min_index, -1, -1):
+        if y[i] > half_height:
+            left_x = x[i]
+            left_y = y[i]
+            print(f"Ponto ESQUERDO encontrado: t = {left_x*1000:.4f} ms, Y = {left_y:.4f} V (índice {i})")
+            break
 
-    # Lado direito: do pico até o final
-    right_indices = np.where((x > min_x) & (y <= half_height))[0]
-    if len(right_indices) == 0:
-        print("  AVISO: Não encontrou cruzamento à direita, usando interpolação")
-        # Interpola para encontrar o ponto exato
-        right_region_x = x[min_index:]
-        right_region_y = y[min_index:]
-        if len(right_region_x) > 1:
-            f_right = interp1d(right_region_y, right_region_x,
-                             kind='linear', fill_value='extrapolate')
-            right_x = float(f_right(half_height))
-        else:
-            right_x = x[-1]
-    else:
-        # Usa o primeiro ponto após o cruzamento e interpola
-        idx = right_indices[0]
-        if idx > min_index:
-            # Interpolação linear entre idx-1 e idx
-            x1, y1 = x[idx - 1], y[idx - 1]
-            x2, y2 = x[idx], y[idx]
-            if y2 != y1:
-                right_x = x1 + (half_height - y1) * (x2 - x1) / (y2 - y1)
-            else:
-                right_x = x2
-        else:
-            right_x = x[idx]
+    if left_x is None:
+        # Não encontrou, usa primeiro ponto
+        left_x = x[0]
+        left_y = y[0]
+        print(f"  AVISO: Não encontrou cruzamento à esquerda, usando primeiro ponto")
 
-    # Largura à meia altura (FWHM)
+    # 5. Largura = diferença em X
     fwhm = right_x - left_x
 
-    print(f"Ponto esquerdo (meia-altura): t = {left_x*1000:.4f} ms")
-    print(f"Ponto direito (meia-altura):  t = {right_x*1000:.4f} ms")
-    print(f"FWHM: {fwhm*1000:.4f} ms ({fwhm*1e6:.2f} μs)")
+    print(f"Largura à meia altura: {fwhm*1000:.4f} ms")
 
     return {
-        'baseline': baseline,
         'min_value': min_value,
         'min_index': min_index,
         'min_x': min_x,
-        'peak_height': peak_height,
         'half_height': half_height,
-        'left_x': left_x,
-        'right_x': right_x,
+        'left_x': left_x,     # Ponto da ESQUERDA
+        'left_y': left_y,
+        'right_x': right_x,   # Ponto da DIREITA
+        'right_y': right_y,
         'fwhm': fwhm
     }
 
@@ -217,44 +181,37 @@ def create_epr_fwhm_plot(df, fwhm_ambiente, fwhm_nitrogenio, output_dir="Grafico
            color=color_nitrogenio, linewidth=2.5, alpha=0.9,
            label='77 K (Nitrogênio Líquido)', zorder=3)
 
-    # Plota linhas de meia-altura (FWHM) - 300 K
-    fwhm_amb_added_to_legend = False
-    if not fwhm_amb_added_to_legend:
-        ax.plot([fwhm_ambiente['left_x']*1000, fwhm_ambiente['right_x']*1000],
-               [fwhm_ambiente['half_height'], fwhm_ambiente['half_height']],
-               color=color_fwhm, linewidth=2, linestyle='--', alpha=0.7,
-               label='Meia-altura (FWHM)', zorder=2)
-        fwhm_amb_added_to_legend = True
-    else:
-        ax.plot([fwhm_ambiente['left_x']*1000, fwhm_ambiente['right_x']*1000],
-               [fwhm_ambiente['half_height'], fwhm_ambiente['half_height']],
-               color=color_fwhm, linewidth=2, linestyle='--', alpha=0.7, zorder=2)
+    # Reta horizontal tracejada na meia-altura - 300 K
+    ax.plot([fwhm_ambiente['right_x']*1000, fwhm_ambiente['left_x']*1000],
+           [fwhm_ambiente['half_height'], fwhm_ambiente['half_height']],
+           color=color_fwhm, linewidth=2, linestyle='--', alpha=0.7,
+           label='Meia-altura', zorder=2)
 
-    # Marcadores verticais nos extremos - 300 K
-    ax.plot([fwhm_ambiente['left_x']*1000, fwhm_ambiente['left_x']*1000],
-           [fwhm_ambiente['baseline'], fwhm_ambiente['half_height']],
-           color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
+    # Linhas verticais tracejadas nos extremos - 300 K
     ax.plot([fwhm_ambiente['right_x']*1000, fwhm_ambiente['right_x']*1000],
-           [fwhm_ambiente['baseline'], fwhm_ambiente['half_height']],
+           [0, fwhm_ambiente['half_height']],
+           color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
+    ax.plot([fwhm_ambiente['left_x']*1000, fwhm_ambiente['left_x']*1000],
+           [0, fwhm_ambiente['half_height']],
            color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
 
-    # Plota linhas de meia-altura (FWHM) - 77 K
-    ax.plot([fwhm_nitrogenio['left_x']*1000, fwhm_nitrogenio['right_x']*1000],
+    # Reta horizontal tracejada na meia-altura - 77 K
+    ax.plot([fwhm_nitrogenio['right_x']*1000, fwhm_nitrogenio['left_x']*1000],
            [fwhm_nitrogenio['half_height'], fwhm_nitrogenio['half_height']],
            color=color_fwhm, linewidth=2, linestyle='--', alpha=0.7, zorder=2)
 
-    # Marcadores verticais nos extremos - 77 K
-    ax.plot([fwhm_nitrogenio['left_x']*1000, fwhm_nitrogenio['left_x']*1000],
-           [fwhm_nitrogenio['baseline'], fwhm_nitrogenio['half_height']],
-           color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
+    # Linhas verticais tracejadas nos extremos - 77 K
     ax.plot([fwhm_nitrogenio['right_x']*1000, fwhm_nitrogenio['right_x']*1000],
-           [fwhm_nitrogenio['baseline'], fwhm_nitrogenio['half_height']],
+           [0, fwhm_nitrogenio['half_height']],
+           color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
+    ax.plot([fwhm_nitrogenio['left_x']*1000, fwhm_nitrogenio['left_x']*1000],
+           [0, fwhm_nitrogenio['half_height']],
            color=color_fwhm, linewidth=1.5, linestyle=':', alpha=0.5, zorder=1)
 
     # Formatação
     ax.set_xlabel('Tempo (ms)', fontsize=14, fontweight='bold')
     ax.set_ylabel('Voltagem (V)', fontsize=14, fontweight='bold')
-    ax.set_title('EPR: Largura à Meia-Altura (FWHM) em Diferentes Temperaturas',
+    ax.set_title('EPR: Largura à Meia Altura em Diferentes Temperaturas',
                 fontsize=16, fontweight='bold', pad=20)
 
     # Grid
@@ -266,25 +223,40 @@ def create_epr_fwhm_plot(df, fwhm_ambiente, fwhm_nitrogenio, output_dir="Grafico
                       frameon=True, fancybox=True, shadow=True)
     legend.get_frame().set_alpha(0.95)
 
-    # Adiciona linha na baseline para referência
-    ax.axhline(y=fwhm_ambiente['baseline'], color='gray',
-              linestyle='--', linewidth=1, alpha=0.4, zorder=0)
+    # Calcula razão das meias alturas
+    razao_larguras = fwhm_nitrogenio['fwhm'] / fwhm_ambiente['fwhm']
 
-    # Texto com valores de FWHM
-    fwhm_text = (
-        f"Largura à Meia-Altura (FWHM):\n"
+    # Texto com valores de largura
+    largura_text = (
+        f"Largura à Meia Altura:\n"
         f"\n"
         f"300 K:  {fwhm_ambiente['fwhm']*1000:.4f} ms\n"
-        f"        ({fwhm_ambiente['fwhm']*1e6:.2f} μs)\n"
         f"\n"
         f"77 K:   {fwhm_nitrogenio['fwhm']*1000:.4f} ms\n"
-        f"        ({fwhm_nitrogenio['fwhm']*1e6:.2f} μs)\n"
         f"\n"
-        f"Razão (77K/300K): {fwhm_nitrogenio['fwhm']/fwhm_ambiente['fwhm']:.2f}"
+        f"77K/300K = {77/300:.3f}\n"
+        f"Razão das meias alturas = {razao_larguras:.3f}"
     )
 
-    ax.text(0.02, 0.05, fwhm_text, transform=ax.transAxes,
-           fontsize=11, verticalalignment='bottom', horizontalalignment='left',
+    ax.text(0.02, 0.05, largura_text, transform=ax.transAxes,
+           fontsize=15, verticalalignment='bottom', horizontalalignment='left',
+           bbox=dict(boxstyle="round,pad=0.6", facecolor="lightgray", alpha=0.9),
+           fontfamily='monospace')
+
+    # Bloco de texto com estimativa de δB (inferior direito)
+    delta_B_300 = 0.17  # mT (do experimento à mão)
+    delta_B_77 = delta_B_300 * 0.948  # mT (ajustado pela razão)
+
+    delta_B_text = (
+        f"Valor estimado de δB:\n"
+        f"\n"
+        f"δB_300 = {delta_B_300:.2f} mT\n"
+        f"\n"
+        f"δB_77 = {delta_B_77:.2f} mT"
+    )
+
+    ax.text(0.98, 0.05, delta_B_text, transform=ax.transAxes,
+           fontsize=17, verticalalignment='bottom', horizontalalignment='right',
            bbox=dict(boxstyle="round,pad=0.6", facecolor="lightgray", alpha=0.9),
            fontfamily='monospace')
 
@@ -339,13 +311,16 @@ def main():
     output_file = create_epr_fwhm_plot(df, fwhm_ambiente, fwhm_nitrogenio, OUTPUT_DIR)
 
     # Resumo final
+    razao_larguras = fwhm_nitrogenio['fwhm'] / fwhm_ambiente['fwhm']
+
     print(f"\n{'='*70}")
     print("RESUMO DA ANÁLISE")
     print(f"{'='*70}")
-    print(f"\nLargura à Meia-Altura (FWHM):")
-    print(f"  300 K: {fwhm_ambiente['fwhm']*1000:.4f} ms ({fwhm_ambiente['fwhm']*1e6:.2f} μs)")
-    print(f"  77 K:  {fwhm_nitrogenio['fwhm']*1000:.4f} ms ({fwhm_nitrogenio['fwhm']*1e6:.2f} μs)")
-    print(f"\nRazão FWHM (77K/300K): {fwhm_nitrogenio['fwhm']/fwhm_ambiente['fwhm']:.3f}")
+    print(f"\nLargura à Meia Altura:")
+    print(f"  300 K: {fwhm_ambiente['fwhm']*1000:.4f} ms")
+    print(f"  77 K:  {fwhm_nitrogenio['fwhm']*1000:.4f} ms")
+    print(f"\nRazão (77K/300K): {razao_larguras:.3f}")
+    print(f"Razão das meias alturas: {razao_larguras:.3f}")
     print(f"\nGráfico gerado: {output_file}")
     print(f"{'='*70}\n")
 

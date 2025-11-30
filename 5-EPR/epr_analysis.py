@@ -44,6 +44,12 @@ geometric_factor = (4/5)**(3/2)  # Fator geométrico Helmholtz
 # Constante de conversão corrente -> campo magnético [T/A]
 K_helmholtz = mu_0 * geometric_factor * n / r
 
+# Incertezas experimentais (baseadas nos últimos algarismos significativos)
+n_uncertainty = 1  # espiras (último alg. sig.)
+r_uncertainty = 0.001  # m (0.1 cm convertido para metros)
+I_uncertainty = 0.01  # A (último alg. sig. da corrente)
+freq_uncertainty_MHz = 0.1  # MHz (último alg. sig. da frequência nos dados)
+
 print("="*70)
 print("ANÁLISE EPR - FATOR g DO COMPOSTO dFPH")
 print("="*70)
@@ -52,9 +58,12 @@ print(f"  h (Planck)      = {h_planck:.4e} J·s")
 print(f"  μ_B (Bohr)      = {mu_B:.4e} J/T")
 print(f"\nParâmetros da bobina de Helmholtz:")
 print(f"  μ₀              = {mu_0:.4e} Vs/Am")
-print(f"  n               = {n} espiras")
-print(f"  r               = {r*100:.1f} cm")
+print(f"  n               = {n} ± {n_uncertainty} espiras")
+print(f"  r               = {r*100:.1f} ± {r_uncertainty*100:.1f} cm")
 print(f"  K (I→B)         = {K_helmholtz:.4e} T/A")
+print(f"\nIncertezas experimentais:")
+print(f"  δI              = {I_uncertainty} A")
+print(f"  δν              = {freq_uncertainty_MHz} MHz")
 print("="*70)
 
 
@@ -71,6 +80,44 @@ def current_to_field(I_amperes):
         campo magnético em Tesla
     """
     return K_helmholtz * I_amperes
+
+
+def calculate_field_uncertainty(I_values):
+    """
+    Calcula incerteza do campo magnético usando propagação de erros.
+
+    B = μ₀ * (4/5)^(3/2) * n/r * I
+
+    Usando propagação de erros para erros relativos:
+    (δB/B)² = (δn/n)² + (δr/r)² + (δI/I)²
+
+    Args:
+        I_values: array com valores de corrente em Ampères
+
+    Returns:
+        array: incerteza do campo magnético em Tesla
+    """
+    # Calcula erro relativo de cada componente
+    relative_n = n_uncertainty / n
+    relative_r = r_uncertainty / r
+
+    # Para cada valor de corrente, calcula o erro relativo
+    I_values = np.atleast_1d(I_values)  # Garante que é array
+
+    # Evita divisão por zero
+    with np.errstate(divide='ignore', invalid='ignore'):
+        relative_I = np.where(I_values != 0, I_uncertainty / I_values, 0)
+
+    # Erro relativo total
+    relative_error = np.sqrt(relative_n**2 + relative_r**2 + relative_I**2)
+
+    # Calcula campo magnético
+    B_values = current_to_field(I_values)
+
+    # Incerteza absoluta em Tesla
+    B_uncertainty = B_values * relative_error
+
+    return B_uncertainty
 
 
 def load_frequency_data(filename):
@@ -291,13 +338,22 @@ def create_epr_plot(results, output_dir="Graficos"):
 
     # Cores
     color_data = '#2E86AB'    # Azul para dados
-    color_fit = '#A23B72'     # Roxo para ajuste
+    color_fit = '#FDB30E'     # Amarelo para ajuste
 
-    # Scatter plot dos dados experimentais
-    ax.scatter(df['B_mT'], df['freq_MHz'],
-              color=color_data, s=100, alpha=0.8,
-              label='Dados Experimentais', zorder=3,
-              edgecolors='white', linewidths=1.5)
+    # Incertezas experimentais
+    freq_unc_MHz = freq_uncertainty_MHz  # MHz (último alg. sig.)
+
+    # Calcula incerteza do campo magnético usando propagação de erros
+    B_uncertainty_T = calculate_field_uncertainty(df['I_A'].values)
+    B_uncertainty_mT = B_uncertainty_T * 1000  # T -> mT
+
+    # Scatter plot dos dados experimentais com barras de erro
+    ax.errorbar(df['B_mT'], df['freq_MHz'],
+               xerr=B_uncertainty_mT, yerr=freq_unc_MHz,
+               fmt='o', color=color_data, markersize=9, alpha=0.8,
+               label='Dados Experimentais', zorder=3,
+               markeredgecolor='white', markeredgewidth=1.5,
+               elinewidth=1.5, capsize=3, capthick=1.5)
 
     # Linha do ajuste linear
     B_fit = np.linspace(df['B_mT'].min() * 0.95, df['B_mT'].max() * 1.05, 200)
@@ -307,7 +363,7 @@ def create_epr_plot(results, output_dir="Graficos"):
 
     ax.plot(B_fit, freq_fit_MHz,
            color=color_fit, linewidth=3, alpha=0.9,
-           label=f'Ajuste Linear (R² = {r2:.6f})', zorder=2)
+           label='Ajuste Linear', zorder=2)
 
     # Formatação
     ax.set_xlabel('Campo Magnético B (mT)', fontsize=14, fontweight='bold')
@@ -356,6 +412,231 @@ def create_epr_plot(results, output_dir="Graficos"):
     plt.close(fig)
 
     return output_file
+
+
+def create_g_table(all_results, output_dir="Graficos"):
+    """
+    Cria tabela com valores de g para cada frequência e média.
+
+    Args:
+        all_results: lista de dicionários com resultados de cada análise
+        output_dir: diretório para salvar a tabela
+    """
+    # Cria diretório se não existir
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+
+    # Prepara dados da tabela
+    table_data = []
+    g_values = []
+
+    for res in all_results:
+        # Extrai faixa de frequência do nome do arquivo
+        freq_range = res['filename'].replace('.csv', '').replace('_', '-')
+
+        # Formata g e incerteza
+        g_str, g_unc_str, _ = format_value_with_uncertainty(
+            res['g_factor'], res['g_uncertainty']
+        )
+
+        table_data.append([
+            freq_range,
+            f"{g_str} ± {g_unc_str}"
+        ])
+
+        g_values.append(res['g_factor'])
+
+    # Calcula média e desvio padrão
+    g_mean = np.mean(g_values)
+    g_std = np.std(g_values, ddof=1)  # Desvio padrão amostral
+
+    # Formata média com arredondamento correto
+    g_mean_str, g_std_str, _ = format_value_with_uncertainty(g_mean, g_std)
+
+    # Cria figura para tabela
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axis('tight')
+    ax.axis('off')
+
+    # Título
+    title_text = "Fator g do composto dFPH - Análise EPR"
+    ax.set_title(title_text, fontsize=16, weight='bold', pad=30)
+
+    # Cabeçalhos
+    headers = [
+        "Faixa de Frequência",
+        "Fator g ± Incerteza"
+    ]
+
+    # Cria tabela
+    table = ax.table(
+        cellText=table_data,
+        colLabels=headers,
+        cellLoc='center',
+        loc='center',
+        colWidths=[0.45, 0.45]
+    )
+
+    # Formatação da tabela
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1, 2.5)
+
+    # Estiliza cabeçalho (azul como no 4-Eletron)
+    for i in range(2):
+        table[(0, i)].set_facecolor('#4472C4')
+        table[(0, i)].set_text_props(weight='bold', color='white', fontsize=13)
+
+    # Adiciona média abaixo da tabela (fora da tabela, em preto, negrito)
+    mean_text = f"Média: g = {g_mean_str} ± {g_std_str}"
+    ax.text(0.5, 0.25, mean_text, ha='center', fontsize=14,
+            weight='bold', color='black', transform=ax.transAxes)
+
+    # Adiciona valor literário (referência)
+    g_lit = 2.0036  # Valor do g do elétron livre (aproximadamente)
+    lit_text = f"g_literatura = {g_lit:.4f} (Elétron livre - Referência)"
+    ax.text(0.5, 0.15, lit_text, ha='center', fontsize=12,
+            style='italic', color='#555555', transform=ax.transAxes)
+
+    # Salva tabela
+    output_file = output_path / "tabela_fator_g.png"
+    fig.tight_layout()
+    fig.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+    print(f"\nTabela de fatores g salva: {output_file}")
+
+    return output_file
+
+
+def create_combined_epr_plot(all_results, output_dir="Graficos"):
+    """
+    Cria gráfico EPR combinado com todos os pontos de todas as frequências.
+
+    Usa cores diferentes para cada faixa de frequência, mas um único ajuste linear.
+
+    Args:
+        all_results: lista de dicionários com resultados de cada análise
+        output_dir: diretório para salvar o gráfico
+    """
+    # Combina todos os DataFrames
+    all_data = []
+    colors_map = {
+        '15_30_MHz.csv': '#E63946',    # Vermelho
+        '30_60_MHz.csv': '#2E86AB',    # Azul
+        '45_90_MHz.csv': '#06A77D'     # Verde
+    }
+
+    labels_map = {
+        '15_30_MHz.csv': '15-30 MHz',
+        '30_60_MHz.csv': '30-60 MHz',
+        '45_90_MHz.csv': '45-90 MHz'
+    }
+
+    for res in all_results:
+        df = res['df'].copy()
+        df['filename'] = res['filename']
+        df['color'] = colors_map.get(res['filename'], '#000000')
+        df['label'] = labels_map.get(res['filename'], res['filename'])
+        all_data.append(df)
+
+    # Concatena todos os dados
+    df_combined = pd.concat(all_data, ignore_index=True)
+
+    print(f"\n{'─'*70}")
+    print(f"Criando gráfico combinado com todos os pontos")
+    print(f"{'─'*70}")
+    print(f"Total de pontos: {len(df_combined)}")
+
+    # Faz ajuste linear com TODOS os pontos
+    slope, intercept, slope_unc, intercept_unc, r2 = linear_fit_with_uncertainty(
+        df_combined['B_T'].values,
+        df_combined['freq_Hz'].values
+    )
+
+    print(f"\nAjuste linear combinado (ν = a·B + b):")
+    print(f"  Coef. angular (a): {slope:.4e} ± {slope_unc:.2e} Hz/T")
+    print(f"  Intercepto (b):    {intercept:.4e} ± {intercept_unc:.2e} Hz")
+    print(f"  R²:                {r2:.8f}")
+
+    # Calcula fator g combinado
+    g_combined, g_combined_unc = calculate_g_factor(slope, slope_unc)
+    g_combined_str, g_combined_unc_str, _ = format_value_with_uncertainty(g_combined, g_combined_unc)
+
+    print(f"\nFator g combinado:")
+    print(f"  g_médio = {g_combined_str} ± {g_combined_unc_str}")
+
+    # Cria figura
+    fig, ax = plt.subplots(figsize=(12, 9))
+
+    color_fit = '#FDB30E'  # Amarelo para ajuste
+
+    # Calcula incertezas
+    freq_unc_MHz = freq_uncertainty_MHz
+    B_uncertainty_T = calculate_field_uncertainty(df_combined['I_A'].values)
+    B_uncertainty_mT = B_uncertainty_T * 1000
+
+    # Plot com cores diferentes para cada arquivo
+    for filename in df_combined['filename'].unique():
+        df_subset = df_combined[df_combined['filename'] == filename]
+        color = df_subset['color'].iloc[0]
+        label = df_subset['label'].iloc[0]
+
+        # Índices do subset no df_combined
+        indices = df_combined[df_combined['filename'] == filename].index
+
+        ax.errorbar(df_subset['B_mT'].values, df_subset['freq_MHz'].values,
+                   xerr=B_uncertainty_mT[indices], yerr=freq_unc_MHz,
+                   fmt='o', color=color, markersize=8, alpha=0.8,
+                   label=label, zorder=3,
+                   markeredgecolor='white', markeredgewidth=1.5,
+                   elinewidth=1.5, capsize=3, capthick=1.5)
+
+    # Linha do ajuste linear (única, para todos os pontos)
+    B_fit = np.linspace(df_combined['B_mT'].min() * 0.95, df_combined['B_mT'].max() * 1.05, 200)
+    B_fit_T = B_fit / 1000  # mT -> T
+    freq_fit_Hz = slope * B_fit_T + intercept
+    freq_fit_MHz = freq_fit_Hz / 1e6  # Hz -> MHz
+
+    ax.plot(B_fit, freq_fit_MHz,
+           color=color_fit, linewidth=3, alpha=0.9,
+           label='Ajuste Linear Combinado', zorder=2)
+
+    # Formatação
+    ax.set_xlabel('Campo Magnético B (mT)', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Frequência ν (MHz)', fontsize=14, fontweight='bold')
+
+    title = f'EPR: Análise Combinada - Fator g do dFPH'
+    ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
+
+    # Grid
+    ax.grid(True, alpha=0.3, linestyle='-', linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # Legenda
+    legend = ax.legend(fontsize=11, loc='upper left',
+                      frameon=True, fancybox=True, shadow=True)
+    legend.get_frame().set_alpha(0.9)
+
+    # Formatação dos ticks
+    ax.tick_params(axis='both', which='major', labelsize=11)
+
+    # Layout
+    plt.tight_layout()
+
+    # Salva gráfico
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+    output_file = output_path / "epr_combined_all_frequencies.png"
+
+    fig.savefig(output_file, dpi=300, bbox_inches='tight',
+               facecolor='white', edgecolor='none')
+
+    print(f"\nGráfico combinado salvo: {output_file}")
+
+    plt.close(fig)
+
+    return output_file, g_combined, g_combined_unc
 
 
 def main():
@@ -411,9 +692,19 @@ def main():
         print(f"  Desvio padrão: {g_std:.6f}")
         print(f"  Consistência: {'Excelente' if g_std < 0.01 else 'Boa' if g_std < 0.05 else 'Regular'}")
 
+        # Gera tabela com fatores g
+        print(f"\nGerando tabela com fatores g...")
+        create_g_table(all_results)
+
+        # Gera gráfico combinado com todos os pontos
+        print(f"\nGerando gráfico combinado com todos os pontos...")
+        combined_file, g_combined, g_combined_unc = create_combined_epr_plot(all_results)
+
         print(f"\n{'='*70}")
         print(f"Análise concluída! {len(all_results)} arquivos processados.")
-        print(f"Gráficos salvos em: Graficos/")
+        print(f"Gráficos individuais, gráfico combinado e tabela salvos em: Graficos/")
+        print(f"\nResultado do ajuste combinado:")
+        print(f"  g_médio = {g_combined:.6f} ± {g_combined_unc:.6f}")
         print(f"{'='*70}")
 
     return all_results

@@ -35,12 +35,17 @@ geometric_factor = (4/5)**(3/2)  # ≈ 0.7155
 # Constante teórica B = K * I
 K_theoretical = mu_0 * geometric_factor * n / r  # [T/A]
 
+# Incertezas experimentais (baseadas nos últimos algarismos significativos)
+n_uncertainty = 1  # espiras (último alg. sig.)
+r_uncertainty = 0.001  # m (0.1 cm convertido para metros)
+I_uncertainty = 0.01  # A (último alg. sig. da corrente)
+
 print(f"="*60)
 print(f"PARÂMETROS DO EXPERIMENTO 5-EPR - SONDA HALL")
 print(f"="*60)
 print(f"μ₀ = {mu_0:.2e} Vs/Am")
-print(f"n = {n} espiras")
-print(f"r = {r*100:.1f} cm = {r:.3f} m")
+print(f"n = {n} ± {n_uncertainty} espiras")
+print(f"r = {r*100:.1f} ± {r_uncertainty*100:.1f} cm = {r:.3f} ± {r_uncertainty:.3f} m")
 print(f"Fator geométrico (4/5)^(3/2) = {geometric_factor:.4f}")
 print(f"Constante teórica K = μ₀ * (4/5)^(3/2) * n/r = {K_theoretical:.2e} T/A")
 print(f"="*60)
@@ -88,14 +93,52 @@ def calculate_theoretical_field(I_values):
 def calculate_theoretical_field_mT(I_values):
     """
     Calcula campo magnético teórico em miliTesla.
-    
+
     Args:
         I_values: array com valores de corrente em Ampères
-    
+
     Returns:
         array: campo magnético teórico em miliTesla
     """
     return calculate_theoretical_field(I_values) * 1000.0  # T -> mT
+
+def calculate_field_uncertainty(I_values):
+    """
+    Calcula incerteza do campo magnético usando propagação de erros.
+
+    B = μ₀ * (4/5)^(3/2) * n/r * I
+
+    Usando propagação de erros para erros relativos:
+    (δB/B)² = (δn/n)² + (δr/r)² + (δI/I)²
+
+    Args:
+        I_values: array com valores de corrente em Ampères
+
+    Returns:
+        array: incerteza do campo magnético em miliTesla
+    """
+    # Calcula erro relativo de cada componente
+    relative_n = n_uncertainty / n
+    relative_r = r_uncertainty / r
+
+    # Para cada valor de corrente, calcula o erro relativo
+    I_values = np.atleast_1d(I_values)  # Garante que é array
+
+    # Evita divisão por zero
+    with np.errstate(divide='ignore', invalid='ignore'):
+        relative_I = np.where(I_values != 0, I_uncertainty / I_values, 0)
+
+    # Erro relativo total
+    relative_error = np.sqrt(relative_n**2 + relative_r**2 + relative_I**2)
+
+    # Calcula campo magnético
+    B_values = calculate_theoretical_field(I_values)
+
+    # Incerteza absoluta em Tesla
+    B_uncertainty = B_values * relative_error
+
+    # Converte para miliTesla
+    return B_uncertainty * 1000.0
 
 def analyze_data(df):
     """
@@ -168,21 +211,29 @@ def create_hall_plot(df, output_dir="Graficos"):
     
     # Cores no estilo do 4-Eletron
     color_exp = '#2E86AB'      # Azul para dados experimentais
-    color_theory = '#A23B72'   # Roxo para curva teórica
-    
-    # Scatter plot dos dados experimentais
-    ax.scatter(df['I_A'], df['B_mT'], 
-              color=color_exp, s=80, alpha=0.8, 
-              label='Dados Experimentais', zorder=3,
-              edgecolors='white', linewidths=1.5)
+    color_theory = '#FDB30E'   # Amarelo para curva teórica
+
+    # Incertezas dos dados experimentais
+    I_uncertainty_A = I_uncertainty  # Última casa decimal da corrente (0.01 A)
+
+    # Calcula incerteza do campo magnético usando propagação de erros
+    B_uncertainty_mT = calculate_field_uncertainty(df['I_A'].values)
+
+    # Scatter plot dos dados experimentais com barras de erro
+    ax.errorbar(df['I_A'], df['B_mT'],
+               yerr=B_uncertainty_mT, xerr=I_uncertainty_A,
+               fmt='o', color=color_exp, markersize=8, alpha=0.8,
+               label='Dados Experimentais', zorder=3,
+               markeredgecolor='white', markeredgewidth=1.5,
+               elinewidth=1.5, capsize=3, capthick=1.5)
     
     # Curva teórica (mais pontos para suavidade)
     I_smooth = np.linspace(0, df['I_A'].max() * 1.1, 200)
     B_theory_smooth = calculate_theoretical_field_mT(I_smooth)
     
-    ax.plot(I_smooth, B_theory_smooth, 
+    ax.plot(I_smooth, B_theory_smooth,
            color=color_theory, linewidth=3, alpha=0.9,
-           label=f'Curva Teórica: B = {K_theoretical:.2e} × I', zorder=2)
+           label='Curva Teórica', zorder=2)
     
     # Formatação do gráfico no estilo do 4-Eletron
     ax.set_xlabel('Corrente I (A)', fontsize=14, fontweight='bold')
